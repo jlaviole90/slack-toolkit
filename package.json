@@ -9,9 +9,14 @@
   },
   "scripts": {
     "setup": "node setup.mjs",
+    "mcp": "node mcp-server.mjs",
     "whoami": "node bin/slack-toolkit.mjs whoami"
   },
   "engines": {
     "node": ">=18"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "zod": "^4.4.3"
   }
 }

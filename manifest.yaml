@@ -19,26 +19,36 @@ features:
 
 oauth_config:
   scopes:
-    # Bot token scopes (xoxb-). Bot can only see channels it has been invited to, and cannot search.
+    # Bot token scopes (xoxb-). Bot can only see conversations it has been invited to, and cannot search.
     bot:
       - channels:read       # list public channels
-      - groups:read         # list private channels it is in
       - channels:history    # read public channel messages
-      - groups:history       # read private channel messages
+      - groups:read         # list private channels it is in
+      - groups:history      # read private channel messages
+      - im:read             # list direct messages
+      - im:history          # read direct messages
+      - mpim:read           # list group direct messages
+      - mpim:history        # read group direct messages
       - chat:write          # post messages
       - users:read          # resolve user names/IDs
+      - files:read          # read files/attachments referenced in messages or canvases
       - bookmarks:read      # read channel bookmarks/link tabs
       - bookmarks:write     # add channel bookmarks/link tabs
       - canvases:read       # read canvases
-      - canvases:write      # create and edit channel canvases
-    # User token scopes (xoxp-). Acts as the installing user; also enables search.
+      - canvases:write      # create and edit standalone + channel canvases
+    # User token scopes (xoxp-). Acts as the installing user; also enables message search.
     user:
       - channels:read
-      - groups:read
       - channels:history
+      - groups:read
       - groups:history
+      - im:read
+      - im:history
+      - mpim:read
+      - mpim:history
       - chat:write
       - users:read
+      - files:read
       - search:read         # message search (bot tokens cannot do this)
       - bookmarks:read
       - bookmarks:write

@@ -16,11 +16,16 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { CONFIG_DIR, TOKEN_FILE, tokenKind } from './lib/slack.mjs';
 
 const isWindows = process.platform === 'win32';
 const SERVER_KEY = 'slack-toolkit';
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+// Absolute path to our own MCP server in this clone. Registered with each client so the
+// canvas/channel/post/bookmark tools are available natively.
+const SERVER_FILE = path.join(__dirname, 'mcp-server.mjs');
 
 // Node 18+ is required for the global fetch used to validate the token.
 if (typeof fetch !== 'function') {
@@ -39,18 +44,15 @@ function parseArgs(argv) {
   return args;
 }
 
-// The command Claude Code / Cursor should run to start the MCP server.
-// On Windows, npx must be wrapped in `cmd /c` or the server fails to launch.
+// The command each client runs to start our MCP server. `node` is on PATH on every OS,
+// so no shell wrapper is needed.
 function serverInvocation() {
-  const base = ['npx', '-y', 'slack-mcp-server@latest', '--transport', 'stdio'];
-  return isWindows ? ['cmd', '/c', ...base] : base;
+  return ['node', SERVER_FILE];
 }
 
-function envEntries(token, kind) {
-  return {
-    [kind === 'bot' ? 'SLACK_MCP_XOXB_TOKEN' : 'SLACK_MCP_XOXP_TOKEN']: token,
-    SLACK_MCP_ADD_MESSAGE_TOOL: 'true',
-  };
+function envEntries(token /* kind */) {
+  // Our server reads SLACK_TOKEN (lib/slack.mjs); both bot and user tokens work.
+  return { SLACK_TOKEN: token };
 }
 
 // --- Claude Code (via its own CLI; cross-platform) ----------------------------
@@ -69,10 +71,12 @@ function registerWithClaudeCode(token, kind) {
   // Idempotent: drop any existing entry first (ignore failure if absent).
   runClaude(['mcp', 'remove', SERVER_KEY, '--scope', 'user']);
 
+  // Arg order matters: `-e/--env` is variadic and will otherwise swallow the server name.
+  // Correct form: claude mcp add [--scope] <name> -e KEY=val -- <command...>
   const env = envEntries(token, kind);
-  const args = ['mcp', 'add', '--scope', 'user', '--transport', 'stdio'];
-  for (const [k, v] of Object.entries(env)) args.push('--env', `${k}=${v}`);
-  args.push(SERVER_KEY, '--', ...serverInvocation());
+  const args = ['mcp', 'add', '--scope', 'user', SERVER_KEY];
+  for (const [k, v] of Object.entries(env)) args.push('-e', `${k}=${v}`);
+  args.push('--', ...serverInvocation());
 
   const r = runClaude(args);
   if (r.status !== 0) {
