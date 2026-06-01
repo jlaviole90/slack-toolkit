@@ -1,0 +1,12 @@
+node_modules/
+.cache/
+*.local
+*.log
+.DS_Store
+
+# Never commit tokens. The setup script stores them in ~/.config/slack-toolkit/, not here,
+# but guard against accidental local copies.
+token
+*.token
+.env
+.env.*

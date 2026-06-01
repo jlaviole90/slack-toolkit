@@ -1,0 +1,17 @@
+{
+  "name": "slack-toolkit",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Shared Slack app + MCP integration: read channels and author Slack canvases from your editor.",
+  "bin": {
+    "slack-toolkit": "bin/slack-toolkit.mjs"
+  },
+  "scripts": {
+    "setup": "node setup.mjs",
+    "whoami": "node bin/slack-toolkit.mjs whoami"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

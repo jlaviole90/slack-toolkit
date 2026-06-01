@@ -1,0 +1,51 @@
+# Slack app manifest.
+# Create the app from this file: https://api.slack.com/apps -> "Create New App" -> "From a manifest"
+# -> pick your workspace -> paste this YAML. See README.md for the full walkthrough.
+#
+# The app declares BOTH bot and user scopes so a team can choose either token model:
+#   - bot token  (xoxb-): one shared credential, acts as the "Slack Toolkit" bot. Simplest to hand out.
+#   - user token (xoxp-): per-person, acts as that person, and additionally unlocks message search.
+# You do not have to use both; install whichever token type you intend to distribute.
+
+display_information:
+  name: Slack Toolkit
+  description: Reads channels and authors Slack canvases from your editor.
+  background_color: "#1f2d3d"
+
+features:
+  bot_user:
+    display_name: Slack Toolkit
+    always_online: true
+
+oauth_config:
+  scopes:
+    # Bot token scopes (xoxb-). Bot can only see channels it has been invited to, and cannot search.
+    bot:
+      - channels:read       # list public channels
+      - groups:read         # list private channels it is in
+      - channels:history    # read public channel messages
+      - groups:history       # read private channel messages
+      - chat:write          # post messages
+      - users:read          # resolve user names/IDs
+      - bookmarks:read      # read channel bookmarks/link tabs
+      - bookmarks:write     # add channel bookmarks/link tabs
+      - canvases:read       # read canvases
+      - canvases:write      # create and edit channel canvases
+    # User token scopes (xoxp-). Acts as the installing user; also enables search.
+    user:
+      - channels:read
+      - groups:read
+      - channels:history
+      - groups:history
+      - chat:write
+      - users:read
+      - search:read         # message search (bot tokens cannot do this)
+      - bookmarks:read
+      - bookmarks:write
+      - canvases:read
+      - canvases:write
+
+settings:
+  org_deploy_enabled: false
+  socket_mode_enabled: false
+  token_rotation_enabled: false

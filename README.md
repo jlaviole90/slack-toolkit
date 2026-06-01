@@ -1,0 +1,172 @@
+# Slack Toolkit
+
+A shareable Slack integration for a team, built for **Claude Code** (and works on macOS, Linux, and Windows). It does two things:
+
+1. **MCP integration** — lets Claude Code read your Slack channels and post messages, via the [korotovsky/slack-mcp-server](https://github.com/korotovsky/slack-mcp-server) (no fork, just configured).
+2. **A small CLI** (`slack-toolkit`) — create and edit Slack **canvases** (the channel "tab" docs), post messages, and add link bookmarks, pointed at any channel.
+
+It is backed by **one shared Slack app** (defined by [`manifest.yaml`](manifest.yaml)) that gets installed to the workspace once. After that, each teammate runs a one-line setup.
+
+---
+
+## Why a shared app (and the token decision)
+
+A Slack token is a credential and **should never be shared in chat or committed to git.** There are two token models; pick one for the team:
+
+| | **Bot token (`xoxb-`)** | **User token (`xoxp-`)** |
+| --- | --- | --- |
+| Acts as | a named bot ("Slack Toolkit") | the individual person |
+| Distribution | **one token for the whole team** | one token per person |
+| Channel access | only channels the bot is **invited** to | everything that person can already see |
+| Message search | not available (Slack blocks `search.messages` for bots) | available |
+| Best for | **shared use (recommended default)** | people who need to act as themselves or search |
+
+The app declares both scope sets, so the setup script auto-detects whichever kind of token you give it.
+
+---
+
+## One-time: create and install the Slack app (an admin does this once)
+
+1. Go to <https://api.slack.com/apps> and click **Create New App -> From a manifest**.
+2. Pick your **workspace**, then paste the contents of [`manifest.yaml`](manifest.yaml) and create the app.
+3. Open **Install App** (left sidebar) and **Install to Workspace**. Approve the scopes. (If your workspace requires admin approval for apps, an admin approves here.)
+4. Copy the token for the model you chose:
+   - **Bot token:** Install App page -> **Bot User OAuth Token** (`xoxb-...`).
+   - **User token:** OAuth & Permissions page -> **User OAuth Token** (`xoxp-...`).
+5. Share the **bot** token with the team through a secret manager (1Password, etc.), **not** in Slack/email. (User tokens are generated per person in step 4, so nothing is shared.)
+
+---
+
+## Per-person setup (everyone who wants it)
+
+Prerequisites: **Node 18+** (`node -v`) and the **Claude Code CLI** (`claude --version`). Works the same on macOS, Linux, and Windows.
+
+```bash
+git clone <this-repo-url> slack-toolkit
+cd slack-toolkit
+
+# Pass the token once. It is validated, stored locally for the CLI, and registered with Claude Code.
+node setup.mjs xoxb-your-team-bot-token        # or your own xoxp- user token
+```
+
+What the one command does (this is the "auto-detect" — it is all inside this single command, nothing runs in the background):
+
+- Verifies the token against Slack.
+- Stores it at `~/.config/slack-toolkit/token` (used by the canvas CLI) — never in the repo.
+- Registers the MCP server with **Claude Code** by running `claude mcp add ... --scope user` for you. Claude Code decides where its own config lives on your OS, and on Windows the `npx` launch is automatically wrapped in `cmd /c` so it actually starts.
+- If you also have Cursor installed, it offers to wire `~/.cursor/mcp.json` too.
+
+Target a specific client if you want:
+
+```bash
+node setup.mjs <token> --client claude-code   # default
+node setup.mjs <token> --client cursor        # also/instead wire Cursor
+node setup.mjs <token> --client all           # both
+```
+
+Then:
+
+1. **Start a new Claude Code session** (and quit/reopen Cursor if you wired it) so the MCP server loads.
+2. If you used the **bot token**, invite the bot to each channel: `/invite @Slack Toolkit`.
+3. Verify: `claude mcp list` (should show `slack-toolkit`) and `node bin/slack-toolkit.mjs whoami`.
+
+### Manual alternative (no script)
+
+If you'd rather not run the script, register it directly. macOS/Linux:
+
+```bash
+claude mcp add --scope user --transport stdio \
+  --env SLACK_MCP_XOXB_TOKEN=xoxb-your-token \
+  --env SLACK_MCP_ADD_MESSAGE_TOOL=true \
+  slack-toolkit -- npx -y slack-mcp-server@latest --transport stdio
+```
+
+Windows (note the `cmd /c` wrapper):
+
+```bat
+claude mcp add --scope user --transport stdio ^
+  --env SLACK_MCP_XOXB_TOKEN=xoxb-your-token ^
+  --env SLACK_MCP_ADD_MESSAGE_TOOL=true ^
+  slack-toolkit -- cmd /c npx -y slack-mcp-server@latest --transport stdio
+```
+
+(For the canvas CLI you'd also set `SLACK_TOKEN` in your environment, or run `node setup.mjs <token>` which stores it for you.)
+
+---
+
+## Using the CLI
+
+The CLI is plain Node, so it runs the same on every OS.
+
+```bash
+# Who am I / which workspace?
+node bin/slack-toolkit.mjs whoami
+
+# List channels this token can see
+node bin/slack-toolkit.mjs channels
+
+# Create a channel canvas from a markdown file
+node bin/slack-toolkit.mjs canvas:create --channel "#your-channel" --title "Weekly Notes" --file ./my-canvas.md
+
+# Pipe markdown in from stdin instead of a file
+cat my-canvas.md | node bin/slack-toolkit.mjs canvas:create --channel C0XXXXXXXXX --title "Notes" --file -
+
+# Replace an existing canvas's content
+node bin/slack-toolkit.mjs canvas:edit --canvas F0XXXXXXXXX --file ./my-canvas.md
+
+# Post a message
+node bin/slack-toolkit.mjs post --channel "#your-channel" --text "Draft is in the canvas."
+
+# Add a link bookmark/tab
+node bin/slack-toolkit.mjs bookmark:add --channel "#your-channel" --title "Team Calendar" --link "https://example.com/..."
+```
+
+`--channel` accepts a `#name` or a channel ID (`C...`/`G...`).
+
+---
+
+## Using it from Claude Code
+
+After setup and a new Claude Code session, the `slack-toolkit` MCP server exposes Slack tools to the agent, including:
+
+- `channels_list` — list channels
+- `conversations_history` / `conversations_replies` — read messages and threads
+- `conversations_add_message` — post a message (enabled by setup via `SLACK_MCP_ADD_MESSAGE_TOOL=true`)
+- `conversations_search_messages` — search (user tokens only; not available with a bot token)
+
+Canvas authoring is **not** an MCP tool in the upstream server, so Claude Code drives canvases through this repo's CLI (the commands above). A typical loop: the agent writes/updates a markdown file, then runs `canvas:create` / `canvas:edit` to publish it.
+
+---
+
+## Security notes
+
+- **Never** paste a token into Slack, email, or a commit. `.gitignore` blocks common token filenames as a backstop.
+- Tokens live only in `~/.config/slack-toolkit/token` (per machine) and inside Claude Code's user config.
+- Prefer the **bot token** for shared use: actions are attributed to the bot, scopes are minimal, and you can rotate one credential (app **Install App -> Reinstall**) if it leaks.
+- Scopes are limited to read + post + canvases + bookmarks. Widen only by editing `manifest.yaml` and re-applying it.
+
+---
+
+## Troubleshooting
+
+| Symptom | Fix |
+| --- | --- |
+| `slack-toolkit` missing from `claude mcp list` | Re-run `node setup.mjs <token>`, then start a **new** Claude Code session. |
+| Windows: server shows "failed"/"connection closed" | `npx` must be launched via `cmd /c`. The script does this automatically; if you added it manually, use the Windows command above. |
+| `channel_not_found` / channel missing from `channels` | Bot tokens only see channels they are invited to: `/invite @Slack Toolkit`. |
+| `not_authed` / `invalid_auth` | Token missing or wrong. Re-run `node setup.mjs <token>`. |
+| `missing_scope (needed: ...)` | Add the scope to `manifest.yaml`, re-apply the manifest, **reinstall** the app, then re-run setup with the new token. |
+| `search` fails on a bot token | Expected — Slack blocks message search for bots. Use a user token if you need search. |
+| `claude: command not found` | Install the Claude Code CLI, or run `node setup.mjs <token> --client cursor`. |
+
+---
+
+## Repo layout
+
+```
+manifest.yaml             Slack app definition (scopes, name). Source of truth for the app.
+setup.mjs                 Cross-platform setup: validate token, store it, register the MCP server with Claude Code (and optionally Cursor).
+bin/slack-toolkit.mjs     The CLI (whoami, channels, canvas:create/edit, post, bookmark:add).
+lib/slack.mjs             Tiny zero-dependency Slack Web API helper.
+package.json              Node project (no dependencies; uses built-in fetch).
+```
