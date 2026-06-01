@@ -1,8 +1,8 @@
 # Slack Toolkit
 
-A shareable Slack integration for a team, built for **Claude Code** (and works on macOS, Linux, and Windows). It does two things:
+A shareable Slack integration for a team, built for **Claude Code** and also working with **Claude Desktop** and **Cursor** (macOS, Linux, and Windows). It does two things:
 
-1. **MCP integration** — lets Claude Code read your Slack channels and post messages, via the [korotovsky/slack-mcp-server](https://github.com/korotovsky/slack-mcp-server) (no fork, just configured).
+1. **MCP integration** — lets Claude Code / Claude Desktop / Cursor read your Slack channels and post messages, via the [korotovsky/slack-mcp-server](https://github.com/korotovsky/slack-mcp-server) (no fork, just configured).
 2. **A small CLI** (`slack-toolkit`) — create and edit Slack **canvases** (the channel "tab" docs), post messages, and add link bookmarks, pointed at any channel.
 
 It is backed by **one shared Slack app** (defined by [`manifest.yaml`](manifest.yaml)) that gets installed to the workspace once. After that, each teammate runs a one-line setup.
@@ -59,10 +59,13 @@ What the one command does (this is the "auto-detect" — it is all inside this s
 Target a specific client if you want:
 
 ```bash
-node setup.mjs <token> --client claude-code   # default
-node setup.mjs <token> --client cursor        # also/instead wire Cursor
-node setup.mjs <token> --client all           # both
+node setup.mjs <token> --client claude-code     # Claude Code (default)
+node setup.mjs <token> --client claude-desktop  # Claude Desktop app
+node setup.mjs <token> --client cursor          # Cursor
+node setup.mjs <token> --client all             # all three
 ```
+
+With no flag, it auto-detects which of these are installed and wires up each one it finds. **Claude Desktop and Cursor use the same MCP config schema**, so the server works there identically; the only difference is the config file location, which the script handles per-OS.
 
 Then:
 

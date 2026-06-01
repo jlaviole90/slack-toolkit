@@ -5,11 +5,13 @@
 //   3. register the "slack-toolkit" MCP server via `claude mcp add` (Claude Code handles
 //      where its own config lives, on every OS).
 //
+// It can also wire Claude Desktop and Cursor (same mcpServers JSON schema).
+//
 // Usage:
-//   node setup.mjs <xoxb-... | xoxp-...> [--client claude-code|cursor|all]
+//   node setup.mjs <xoxb-... | xoxp-...> [--client claude-code|claude-desktop|cursor|all]
 //   SLACK_TOKEN=xoxb-... node setup.mjs
 //
-// Default target is Claude Code. Pass --client cursor (or all) to also wire Cursor's mcp.json.
+// With no --client flag it auto-detects installed clients and configures each one it finds.
 
 import fs from 'node:fs';
 import os from 'node:os';
@@ -78,10 +80,10 @@ function registerWithClaudeCode(token, kind) {
   }
 }
 
-// --- Cursor (writes ~/.cursor/mcp.json; same path on every OS) ----------------
+// --- JSON-config clients (Cursor, Claude Desktop) -----------------------------
 
-function registerWithCursor(token, kind) {
-  const cfgPath = path.join(os.homedir(), '.cursor', 'mcp.json');
+// Write the server into a client's mcpServers JSON file (same schema everywhere).
+function writeJsonClient(cfgPath, token, kind) {
   let cfg = { mcpServers: {} };
   try {
     cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
@@ -95,13 +97,30 @@ function registerWithCursor(token, kind) {
   return cfgPath;
 }
 
+// Cursor uses ~/.cursor/mcp.json on every OS.
+function cursorConfigPath() {
+  return path.join(os.homedir(), '.cursor', 'mcp.json');
+}
+
+// Claude Desktop's config path is per-OS.
+function claudeDesktopConfigPath() {
+  const home = os.homedir();
+  if (process.platform === 'darwin') {
+    return path.join(home, 'Library', 'Application Support', 'Claude', 'claude_desktop_config.json');
+  }
+  if (isWindows) {
+    return path.join(process.env.APPDATA || path.join(home, 'AppData', 'Roaming'), 'Claude', 'claude_desktop_config.json');
+  }
+  return path.join(home, '.config', 'Claude', 'claude_desktop_config.json');
+}
+
 // --- main ---------------------------------------------------------------------
 
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   const token = (args._[0] || process.env.SLACK_TOKEN || '').trim();
   if (!token) {
-    console.error('Usage: node setup.mjs <token> [--client claude-code|cursor|all]');
+    console.error('Usage: node setup.mjs <token> [--client claude-code|claude-desktop|cursor|all]');
     console.error('  token starts with xoxb- (bot) or xoxp- (user)');
     process.exit(1);
   }
@@ -142,11 +161,12 @@ async function main() {
   // 3. Decide which client(s) to configure.
   const claudePresent = hasClaudeCli();
   let targets;
-  if (args.client === 'all') targets = ['claude-code', 'cursor'];
+  if (args.client === 'all') targets = ['claude-code', 'claude-desktop', 'cursor'];
   else if (args.client) targets = [args.client];
   else {
     targets = [];
     if (claudePresent) targets.push('claude-code');
+    if (fs.existsSync(path.dirname(claudeDesktopConfigPath()))) targets.push('claude-desktop');
     if (fs.existsSync(path.join(os.homedir(), '.cursor'))) targets.push('cursor');
     if (targets.length === 0) targets = ['claude-code']; // will surface a clear error below
     console.log(`Auto-detected client(s): ${targets.join(', ')} (override with --client)`);
@@ -165,8 +185,11 @@ async function main() {
         registerWithClaudeCode(token, kind);
         console.log(`Registered "${SERVER_KEY}" with Claude Code (user scope, all projects).`);
         restart.add('Claude Code (start a new session)');
+      } else if (t === 'claude-desktop') {
+        console.log(`Updated ${writeJsonClient(claudeDesktopConfigPath(), token, kind)}`);
+        restart.add('Claude Desktop (quit and reopen)');
       } else if (t === 'cursor') {
-        console.log(`Updated ${registerWithCursor(token, kind)}`);
+        console.log(`Updated ${writeJsonClient(cursorConfigPath(), token, kind)}`);
         restart.add('Cursor (quit and reopen)');
       } else {
         console.warn(`Skipping unknown client "${t}".`);
