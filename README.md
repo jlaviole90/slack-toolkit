@@ -9,14 +9,18 @@ It is backed by **one shared Slack app** (defined by [`manifest.yaml`](manifest.
 
 ### MCP tools
 
-| Tool | What it does |
-| --- | --- |
-| `slack_list_channels` | List channels the token can see (a bot sees channels it was invited to) |
-| `slack_read_channel` | Read recent messages from a channel (`#name` or ID) |
-| `slack_post_message` | Post a message to a channel |
-| `slack_create_canvas` | Create a channel canvas from a title + markdown |
-| `slack_edit_canvas` | Replace an existing canvas's content by ID |
-| `slack_add_bookmark` | Add a link bookmark/tab to a channel |
+Each tool ships a full schema (typed, documented parameters) and behavior annotations
+(read-only vs. write/destructive), so agents discover and use them correctly.
+
+| Tool | Read/Write | What it does |
+| --- | --- | --- |
+| `slack_list_channels` | read | List channels the token can see (a bot sees channels it was invited to); returns IDs to pass to other tools |
+| `slack_read_channel` | read | Read recent messages from a channel (`#name` or ID) |
+| `slack_get_canvas` | read | Fetch a canvas's current content by channel or canvas ID (needs `files:read`) |
+| `slack_post_message` | write | Post a message to a channel |
+| `slack_create_canvas` | write | Create a channel canvas from a title + markdown; returns the canvas ID |
+| `slack_edit_canvas` | write (destructive) | Replace an existing canvas's full content by ID |
+| `slack_add_bookmark` | write | Add a link bookmark/tab to a channel |
 
 ---
 

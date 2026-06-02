@@ -20,6 +20,10 @@ Usage:
   slack-toolkit canvas:edit --canvas <CANVAS_ID> (--file <path>|--file - |--md "<markdown>")
       Replace a canvas's full content.
 
+  slack-toolkit canvas:get (--channel <#name|ID> | --canvas <CANVAS_ID>) [--out <path>]
+      Fetch a canvas's current content. Resolves a channel's attached canvas, or a canvas by ID.
+      Writes to <path> with --out, otherwise prints to stdout.
+
   slack-toolkit post --channel <#name|ID> --text "<message>"
       Post a message to a channel.
 
@@ -119,6 +123,34 @@ async function main() {
         { json: true },
       );
       console.log(`edited canvas: ${args.canvas}`);
+      break;
+    }
+
+    case 'canvas:get': {
+      let fileId = typeof args.canvas === 'string' ? args.canvas : undefined;
+      if (!fileId) {
+        if (!args.channel) throw new Error('Provide --channel <#name|ID> or --canvas <CANVAS_ID>');
+        const channel = await resolveChannel(args.channel);
+        const info = await api('conversations.info', { channel });
+        const props = info.channel?.properties || {};
+        // Channel canvas may live as properties.canvas.file_id, or as a tab of type "canvas".
+        fileId =
+          props.canvas?.file_id ||
+          (props.tabs || []).find((t) => t.type === 'canvas' && t.data?.file_id)?.data?.file_id;
+        if (!fileId) throw new Error('No canvas is attached to that channel.');
+      }
+      const fi = await api('files.info', { file: fileId });
+      const url = fi.file?.url_private_download || fi.file?.url_private;
+      if (!url) throw new Error('Canvas file has no downloadable content URL.');
+      const res = await fetch(url, { headers: { Authorization: `Bearer ${loadToken()}` } });
+      if (!res.ok) throw new Error(`Failed to download canvas (${res.status}).`);
+      const body = await res.text();
+      if (typeof args.out === 'string') {
+        fs.writeFileSync(args.out, body);
+        console.error(`wrote canvas ${fileId} -> ${args.out} (${body.length} bytes)`);
+      } else {
+        process.stdout.write(body);
+      }
       break;
     }
 
